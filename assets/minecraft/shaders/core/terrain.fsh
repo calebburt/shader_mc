@@ -90,10 +90,10 @@ void main() {
 
     // Specular term
     float spec = pow(max(dot(R, V), 0.0), shininess);
-    float specular = 0.5 * spec;
+    float specular = 0.1 * spec;
 
     // Final color
-    float lighting = ambient + diffuse + specular;
+    float lighting = ambient + diffuse;
 
     float lightmap = value(vertexColor.rgb);
     
@@ -105,9 +105,9 @@ void main() {
         lighting = mix(lighting, lightmap, 0.5);
     }
 
+    vec3 litColor = lighting * texColor.rgb + vec3(specular);
+
     // lighting = mix(lightmap, mix(lighting, lightmap, 0.3), lightmap);
-    lighting = mix(0.0, lighting, lightmap);
-    
-    fragColor = vec4(texColor.rgb * lighting, texColor.a);
+    fragColor = vec4(clamp(mix(vec3(lightmap * texColor.rgb), litColor, lightmap), 0.0, 1.0), vertexColor.a);
     #endif
 }
