@@ -17,9 +17,6 @@ layout(location = 3) in ivec2 UV2;
 #ifdef MULTIDRAW_TERRAIN
 layout(location = 4) in ivec3 ChunkPosition;
 layout(location = 5) in float ChunkVisibility;
-layout(location = 6) in vec3 Normal;
-#else
-layout(location = 4) in vec3 Normal;
 #endif
 
 #ifndef OIT_ALPHA_ONLY
@@ -31,7 +28,10 @@ layout(location = 1) out float cylindricalVertexDistance;
 layout(location = 2) out vec4 vertexColor;
 layout(location = 3) out vec2 texCoord0;
 layout(location = 4) out float chunkVisibility;
-layout(location = 5) out vec3 vNormal;
+// Camera-relative world position, used to recover the geometric normal in the
+// fragment stage. The terrain vertex format carries no normal attribute, so the
+// normal has to be derived from screen-space derivatives of this.
+layout(location = 5) out vec3 cameraRelativePos;
 
 void main() {
     vec3 pos = Position + (ChunkPosition - CameraBlockPos) + CameraOffset;
@@ -45,7 +45,7 @@ void main() {
     vertexColor = Color;
     #endif
     texCoord0 = UV0;
-    vNormal = normalize((ModelViewMat * vec4(Normal, 0.0)).xyz);
+    cameraRelativePos = pos;
 
     const float chunkFullyVisibleRange = 16.0;
     float dist = length(pos);

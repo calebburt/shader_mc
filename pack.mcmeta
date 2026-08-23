@@ -1,6 +1,7 @@
 {
   "pack": {
-    "pack_format": 42,
-    "description": "Adds a cool shader to make it look better! :)"
+    "min_format": 96,
+    "max_format": 96,
+    "description": "Renders terrain surface normals as colour."
   }
 }
