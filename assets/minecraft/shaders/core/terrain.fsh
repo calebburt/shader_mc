@@ -31,6 +31,20 @@ vec3 chroma(vec3 c) {
     return c / value(c);
 }
 
+// Deterministically perturb a normal using a color.
+vec3 perturbNormal(vec3 normal, vec3 color) {
+    // Map color from [0,1] to [-1,1] so it acts like a direction vector
+    vec3 influence = normalize(color * 2.0 - 1.0);
+
+    // Strength of perturbation based on color intensity
+    float strength = length(color) * 0.5;  // tweakable
+
+    // Combine original normal with influence
+    vec3 perturbed = normalize(normal + influence * strength);
+
+    return perturbed;
+}
+
 // Vanilla's terrain texture sample: RGSS when supersampling is on, nearest
 // otherwise, tinted by the vertex colour. Not wired into the output -- swap it
 // into fragColor when you want the albedo back.
@@ -70,11 +84,7 @@ void main() {
     const float shininess = 0.5;
 
     vec4 texColor = sampleTexture();
-
-    // // Basic diffuse material
-    // float lighting = dot(normal, normalize(vec3(1, 1, 1)));
-    // lighting = (lighting + 1.0) * 0.5;   // remap from [-1,1] -> [0,1]
-    // lighting = max(lighting, 0.2);       // minimum brightness
+    normal = normalize(mix(normal, perturbNormal(normal, texColor.rgb), 0.5));
 
     vec3 N = normalize(normal);
     vec3 V = normalize(-cameraRelativePos);   // view direction
@@ -90,7 +100,7 @@ void main() {
 
     // Specular term
     float spec = pow(max(dot(R, V), 0.0), shininess);
-    float specular = 0.1 * spec;
+    float specular = 0.25 * spec;
 
     // Final color
     float lighting = ambient + diffuse;
@@ -107,7 +117,6 @@ void main() {
 
     vec3 litColor = lighting * texColor.rgb + vec3(specular);
 
-    // lighting = mix(lightmap, mix(lighting, lightmap, 0.3), lightmap);
     fragColor = vec4(clamp(mix(vec3(lightmap * texColor.rgb), litColor, lightmap), 0.0, 1.0), vertexColor.a);
     #endif
 }
