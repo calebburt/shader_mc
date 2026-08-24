@@ -65,25 +65,12 @@ vec3 geometricNormal(vec3 cameraRelative) {
     return dot(normal, cameraRelative) > 0.0 ? -normal : normal;
 }
 
-void main() {
-    // Derivatives must be evaluated before any discard so that neighbouring
-    // fragments in the same quad still agree on them.
-    vec3 normal = geometricNormal(cameraRelativePos);
-
-    vec4 color = (UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize) : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize)) * vertexColor;
-    #ifdef ALPHA_CUTOUT
-    if (color.a < ALPHA_CUTOUT) {
-        discard;
-    }
-    #endif
-
-    #ifdef OIT_ALPHA_ONLY
-    executeAlphaOnlyPhase(gl_FragCoord.z, color.a);
-    #else
-    const vec3 lightColor = vec3(1);
+vec3 getLighting() {
     const float shininess = 0.5;
 
     vec4 texColor = sampleTexture();
+    
+    vec3 normal = geometricNormal(cameraRelativePos);
     normal = normalize(mix(normal, perturbNormal(normal, texColor.rgb), 0.5));
 
     vec3 N = normalize(normal);
@@ -105,17 +92,30 @@ void main() {
     // Final color
     float lighting = ambient + diffuse;
 
-    float lightmap = value(vertexColor.rgb);
-    
-    if (lightmap < 0.5) {
-        // No sunlight
-        lighting = lightmap;
-    } else {
-        // Blend lightmap
-        lighting = mix(lighting, lightmap, 0.5);
-    }
-
     vec3 litColor = lighting * texColor.rgb + vec3(specular);
+}
+
+void main() {
+    // Derivatives must be evaluated before any discard so that neighbouring
+    // fragments in the same quad still agree on them.
+    vec3 normal = geometricNormal(cameraRelativePos);
+
+    vec4 color = (UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize) : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize)) * vertexColor;
+    #ifdef ALPHA_CUTOUT
+    if (color.a < ALPHA_CUTOUT) {
+        discard;
+    }
+    #endif
+
+    #ifdef OIT_ALPHA_ONLY
+    executeAlphaOnlyPhase(gl_FragCoord.z, color.a);
+    #else
+
+    vec4 texColor = sampleTexture();
+
+    vec3 litColor = getLighting();
+
+    float lightmap = value(vertexColor.rgb);
 
     fragColor = vec4(clamp(mix(vec3(lightmap * texColor.rgb), litColor, lightmap), 0.0, 1.0), vertexColor.a);
     #endif

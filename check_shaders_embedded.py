@@ -1,6 +1,9 @@
 import ctypes, json, os, re, sys, zipfile
 
-src_dir, mc_dir, forced_version = sys.argv[1], sys.argv[2], sys.argv[3]
+os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+
+src_dir, mc_dir = sys.argv[1], sys.argv[2]
+forced_version = sys.argv[3] if len(sys.argv) > 3 else ""
 
 VARIANTS = {
     "terrain": [
@@ -78,7 +81,13 @@ def build(source, defines):
     injected = ["#define %s %s" % kv for kv in defines.items()]
     return "\n".join(head + injected + body)
 
-from OpenGL import EGL, GL
+try:
+    from OpenGL import EGL, GL
+except ImportError as exc:
+    print("Shader validation requires a working EGL/OpenGL runtime.", file=sys.stderr)
+    print("PyOpenGL could not load the EGL backend on this machine.", file=sys.stderr)
+    print("Install a Mesa/EGL runtime or run the checker from WSL/Linux.", file=sys.stderr)
+    raise SystemExit(1) from exc
 
 display = EGL.eglGetDisplay(EGL.EGL_DEFAULT_DISPLAY)
 EGL.eglInitialize(display, ctypes.pointer(EGL.EGLint()), ctypes.pointer(EGL.EGLint()))
