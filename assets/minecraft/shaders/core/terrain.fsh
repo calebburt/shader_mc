@@ -31,6 +31,46 @@ vec3 chroma(vec3 c) {
     return c / value(c);
 }
 
+// Internal mutable state
+float rngState = 0.0;
+
+// Initialize RNG state once per shader invocation
+void initRNG(float seed) {
+    rngState = seed;
+}
+
+// Hash function
+float hash(float x) {
+    return fract(sin(x) * 43758.5453123);
+}
+
+// Combine all inputs into one seed
+float makeSeed() {
+    float s = 0.0;
+
+    // Mix floats
+    s += sphericalVertexDistance * 1.2345;
+    s += cylindricalVertexDistance * 5.6789;
+    s += chunkVisibility * 9.1011;
+
+    // Mix vec2
+    s += dot(texCoord0, vec2(12.9898, 78.233));
+
+    // Mix vec3
+    s += dot(cameraRelativePos, vec3(45.123, 12.345, 98.765));
+
+    // Mix vec4
+    s += dot(vertexColor, vec4(3.14159, 2.71828, 1.61803, 0.57721));
+
+    return hash(s);
+}
+
+// Random float in [0,1)
+float rand() {
+    rngState = hash(rngState + 1.0);
+    return rngState;
+}
+
 // Deterministically perturb a normal using a color.
 vec3 perturbNormal(vec3 normal, vec3 color) {
     // Map color from [0,1] to [-1,1] so it acts like a direction vector
@@ -101,7 +141,45 @@ vec3 getLighting() {
     return litColor;
 }
 
+void doFog(inout vec3 color) {
+    const float density = 0.01; // base extinction coefficient
+
+    // distances
+    float dist = sphericalVertexDistance;
+
+    // resolve environment and render ranges
+    float envStart = FogEnvironmentalStart;
+    float envEnd = FogEnvironmentalEnd;
+    float renderStart = FogRenderDistanceStart;
+    float renderEnd = FogRenderDistanceEnd;
+
+    // overall fog influence in [0,1]
+    float fogValue = total_fog_value(sphericalVertexDistance, cylindricalVertexDistance, envStart, envEnd, renderStart, renderEnd);
+
+    // compute fogStart/fogEnd influenced by the combined fogValue
+    float fogStart = mix(renderStart, envStart, fogValue);
+    float fogEnd = mix(renderEnd, envEnd, fogValue);
+
+    float rangeLen = max(0.0001, fogEnd - fogStart);
+    float rangeFactor = clamp((dist - fogStart) / rangeLen, 0.0, 1.0);
+
+    // height-based falloff reduces density above the camera
+    float height = cameraRelativePos.y;
+    float heightFalloff = 0.02;
+
+    float localDensity = density * exp(-heightFalloff * max(height, 0.0));
+
+    float tau = localDensity * dist * rangeFactor;
+    float transmittance = exp(-tau);
+
+    vec3 inscatter = (1.0 - transmittance) * FogColor.rgb;
+
+    color = inscatter + color * transmittance;
+}
+
 void main() {
+    initRNG(makeSeed());
+
     // Derivatives must be evaluated before any discard so that neighbouring
     // fragments in the same quad still agree on them.
     vec3 normal = geometricNormal(cameraRelativePos);
@@ -121,6 +199,12 @@ void main() {
 
     vec3 litColor = getLighting();
 
-    fragColor = vec4(litColor, vertexColor.a);
+    doFog(litColor);
+
+    float lightmap = value(vertexColor.rgb);
+
+    vec3 baseScene = clamp(mix(vec3(lightmap * texColor.rgb), litColor, lightmap), 0.0, 1.0);
+
+    fragColor = vec4(baseScene, vertexColor.a);
     #endif
 }
