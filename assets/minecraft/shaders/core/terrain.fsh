@@ -69,7 +69,7 @@ vec3 getLighting() {
     const float shininess = 0.5;
 
     vec4 texColor = sampleTexture();
-    
+
     vec3 normal = geometricNormal(cameraRelativePos);
     normal = normalize(mix(normal, perturbNormal(normal, texColor.rgb), 0.5));
 
@@ -93,6 +93,12 @@ vec3 getLighting() {
     float lighting = ambient + diffuse;
 
     vec3 litColor = lighting * texColor.rgb + vec3(specular);
+
+    float lightmap = value(vertexColor.rgb);
+
+    litColor = clamp(mix(lightmap * texColor.rgb + specular * lightmap, litColor, lightmap), 0.0, 1.0);
+
+    return litColor;
 }
 
 void main() {
@@ -115,8 +121,6 @@ void main() {
 
     vec3 litColor = getLighting();
 
-    float lightmap = value(vertexColor.rgb);
-
-    fragColor = vec4(clamp(mix(vec3(lightmap * texColor.rgb), litColor, lightmap), 0.0, 1.0), vertexColor.a);
+    fragColor = vec4(litColor, vertexColor.a);
     #endif
 }
