@@ -17,7 +17,21 @@
                     "use_depth_buffer": true
                 }
             ],
-            "output": "swap"
+            "output": "swap",
+            "uniforms": {
+                "SsrConfig": [
+                    {
+                        "name": "TanHalfFov",
+                        "type": "float",
+                        "value": 0.7002
+                    },
+                    {
+                        "name": "Strength",
+                        "type": "float",
+                        "value": 1
+                    }
+                ]
+            }
         },
         {
             "vertex_shader": "minecraft:core/screenquad",
@@ -34,7 +48,12 @@
                     {
                         "name": "ColorModulate",
                         "type": "vec4",
-                        "value": [ 1.0, 1.0, 1.0, 1.0 ]
+                        "value": [
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0
+                        ]
                     }
                 ]
             }
