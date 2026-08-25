@@ -14,6 +14,7 @@ layout(std140) uniform SsrConfig {
     float TanHalfFov;
     float Strength;
     float Reflectance;
+    float DebugView;
 };
 
 layout(location = 0) in vec2 texCoord;
@@ -29,6 +30,14 @@ const float SKY_DEPTH = 0.9999;   // at or past this, the pixel is sky
 const float BORDER_FADE = 0.08;   // fade hits out this far from the screen edge
 const float FLAT_MIN = 0.40;      // normal agreement: below this is an edge
 const float FLAT_MAX = 0.85;      // and above this is a surface
+const float NEAR_PLANE = 0.05;    // only used to label the depth debug view
+
+// What a ray ended up doing, for DebugView 3.
+const int RAY_OUT_OF_STEPS = 0;
+const int RAY_SKY = 1;
+const int RAY_GEOMETRY = 2;
+const int RAY_NEAR_PLANE = 3;
+const int RAY_OFF_SCREEN = 4;
 
 // View-space position of a pixel, in units of the near plane distance. Working
 // in those units means the near plane cancels out of every direction and ratio
@@ -47,17 +56,24 @@ vec2 viewToUv(vec3 p, vec2 lens) {
 // screen to compare it against the depth buffer. Returns the reflected color in
 // rgb and how much to trust it in a: zero means the ray found nothing, and the
 // pixel must then be left exactly as it was.
-vec4 march(vec3 origin, vec3 dir, vec2 lens) {
+vec4 march(vec3 origin, vec3 dir, vec2 lens, out int outcome) {
     float stepSize = origin.z * STEP_FRACTION;
     vec3 p = origin;
+    outcome = RAY_OUT_OF_STEPS;
 
     for (int i = 0; i < MAX_STEPS; ++i) {
         p += dir * stepSize;
         stepSize *= STEP_GROWTH;
-        if (p.z <= 1.0) break; // crossed the near plane
+        if (p.z <= 1.0) {
+            outcome = RAY_NEAR_PLANE; // aimed back past the camera
+            break;
+        }
 
         vec2 uv = viewToUv(p, lens);
-        if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) break;
+        if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+            outcome = RAY_OFF_SCREEN; // whatever it would have hit was never drawn
+            break;
+        }
 
         // Geometry off the side of the screen was never rendered and so cannot
         // be reflected; fade out approaching that edge instead of cutting off.
@@ -68,6 +84,7 @@ vec4 march(vec3 origin, vec3 dir, vec2 lens) {
         if (depth >= SKY_DEPTH) {
             // The sky is a perfectly good thing to see reflected, and over open
             // ground it is the only thing an upward ray can ever reach.
+            outcome = RAY_SKY;
             return vec4(texture(SceneTexSampler, uv).rgb, fade);
         }
 
@@ -76,6 +93,7 @@ vec4 march(vec3 origin, vec3 dir, vec2 lens) {
         // Hit: the ray has passed behind this pixel's surface, but not so far
         // behind that it is really occluded by something in the foreground.
         if (behind > sceneZ * SELF_BIAS && behind < sceneZ * THICKNESS) {
+            outcome = RAY_GEOMETRY;
             return vec4(texture(SceneTexSampler, uv).rgb, fade);
         }
     }
@@ -85,8 +103,10 @@ vec4 march(vec3 origin, vec3 dir, vec2 lens) {
 void main() {
     vec3 base = texture(SceneTexSampler, texCoord).rgb;
     float depth = texture(DepthTexSampler, texCoord).r;
+    int debug = int(DebugView + 0.5);
     if (depth >= SKY_DEPTH) {
-        fragColor = vec4(base, 1.0);
+        // Sky pixel: nothing to reflect off. Black in every debug view.
+        fragColor = vec4(debug == 0 ? base : vec3(0.0), 1.0);
         return;
     }
 
@@ -116,7 +136,8 @@ void main() {
     vec3 nBwd = normalize(cross(P - pD, P - pL));
     float flatness = smoothstep(FLAT_MIN, FLAT_MAX, dot(nFwd, nBwd));
     if (flatness <= 0.0) {
-        fragColor = vec4(base, 1.0);
+        // Edge or silhouette: the normal here is not usable. Grey when debugging.
+        fragColor = vec4(debug == 0 ? base : vec3(0.25), 1.0);
         return;
     }
     vec3 N = normalize(nFwd + nBwd);
@@ -128,6 +149,27 @@ void main() {
     float cosTheta = clamp(dot(N, -I), 0.0, 1.0);
     float fresnel = Reflectance + (1.0 - Reflectance) * pow(1.0 - cosTheta, 5.0);
 
-    vec4 hit = march(P, R, lens);
-    fragColor = vec4(mix(base, hit.rgb, fresnel * Strength * flatness * hit.a), 1.0);
+    int outcome;
+    vec4 hit = march(P, R, lens, outcome);
+    float weight = fresnel * Strength * flatness * hit.a;
+
+    // DebugView, set in ssr.json: 0 renders normally, the rest answer "which
+    // stage gave up on this pixel?" without needing a debugger in the game.
+    if (debug == 1) {                       // reconstructed normal
+        fragColor = vec4(N * 0.5 + 0.5, 1.0);
+    } else if (debug == 2) {                // distance, one stripe per 8 blocks
+        float blocks = P.z * NEAR_PLANE;
+        fragColor = vec4(vec3(fract(blocks / 8.0)), 1.0);
+    } else if (debug == 3) {                // what the ray did
+        vec3 c = vec3(1.0, 0.0, 0.0);                       // red: out of steps
+        if (outcome == RAY_GEOMETRY)   c = vec3(0.0, 1.0, 0.0);  // green: hit geometry
+        if (outcome == RAY_SKY)        c = vec3(0.2, 0.4, 1.0);  // blue: hit sky
+        if (outcome == RAY_OFF_SCREEN) c = vec3(1.0, 0.9, 0.0);  // yellow: left the screen
+        if (outcome == RAY_NEAR_PLANE) c = vec3(1.0, 0.0, 1.0);  // magenta: back past camera
+        fragColor = vec4(c, 1.0);
+    } else if (debug == 4) {                // how strong the reflection came out
+        fragColor = vec4(vec3(weight), 1.0);
+    } else {
+        fragColor = vec4(mix(base, hit.rgb, weight), 1.0);
+    }
 }
