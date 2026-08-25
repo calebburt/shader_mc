@@ -13,9 +13,11 @@ VARIANTS = {
         {"OIT": "1", "OIT_ALPHA_ONLY": "1", "OIT_DEPTH_BOUNDS": "1"},
         {"OIT": "1", "OIT_ALPHA_ONLY": "1", "OIT_TRANSMITTANCE": "1"},
     ],
+    "ssr": [{}],
 }
 DEFAULT_VARIANTS = [{}]
 MULTIDRAW = {"terrain"}
+POST_PASS_SHADERS = {"ssr"}
 
 def find_jar():
     versions = os.path.join(mc_dir, "versions")
@@ -120,10 +122,14 @@ print("vanilla: %s (%s)" % (version, GL.glGetString(GL.GL_VERSION).decode()))
 print()
 
 core = os.path.join(src_dir, "assets/minecraft/shaders/core")
+post = os.path.join(src_dir, "assets/minecraft/shaders/post")
 if not os.path.isdir(core):
     sys.exit("No core shaders at " + core)
 
 failed = skipped = passed = 0
+
+# Check core shaders
+print("Core shaders:")
 for filename in sorted(os.listdir(core)):
     stem, ext = os.path.splitext(filename)
     stage = {".vsh": GL.GL_VERTEX_SHADER, ".fsh": GL.GL_FRAGMENT_SHADER}.get(ext)
@@ -151,6 +157,34 @@ for filename in sorted(os.listdir(core)):
         print("  FAIL  %s" % label)
         for line in log.splitlines():
             print("          %s" % line)
+
+# Check post-pass shaders if directory exists
+if os.path.isdir(post):
+    print()
+    print("Post-pass shaders:")
+    for filename in sorted(os.listdir(post)):
+        stem, ext = os.path.splitext(filename)
+        stage = {".vsh": GL.GL_VERTEX_SHADER, ".fsh": GL.GL_FRAGMENT_SHADER}.get(ext)
+        if stage is None:
+            continue
+        # Skip post-pass shaders not in our VARIANTS list
+        if stem not in VARIANTS:
+            continue
+        
+        ours = open(os.path.join(post, filename)).read()
+        variants = list(VARIANTS.get(stem, DEFAULT_VARIANTS))
+        
+        for defines in variants:
+            label = "%s [%s]" % (filename, " ".join(sorted(defines)) or "-")
+            ok, log = compile(ours, defines, stage)
+            if ok:
+                passed += 1
+                print("  PASS  %s" % label)
+                continue
+            failed += 1
+            print("  FAIL  %s" % label)
+            for line in log.splitlines():
+                print("          %s" % line)
 
 print()
 print("%d passed, %d failed, %d skipped" % (passed, failed, skipped))
