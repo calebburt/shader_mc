@@ -28,7 +28,12 @@
                     {
                         "name": "Strength",
                         "type": "float",
-                        "value": 1
+                        "value": 0.8
+                    },
+                    {
+                        "name": "Reflectance",
+                        "type": "float",
+                        "value": 0.08
                     }
                 ]
             }
