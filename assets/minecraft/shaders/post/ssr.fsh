@@ -1,30 +1,37 @@
 #version 330
+#extension GL_ARB_separate_shader_objects : require
 
-in vec2 uv;
+// Inputs: scene color and depth textures (no config uniforms needed).
+// Sampler names are the post_effect pass sampler_name + "Sampler".
+uniform sampler2D SceneTexSampler; // full scene color
+uniform sampler2D DepthTexSampler; // depth buffer (non-linear depth from 0..1)
 
-out vec4 fragColor;
+layout(location = 0) in vec2 texCoord;
 
-// Inputs: scene color and depth textures (no uniforms needed).
-uniform sampler2D SceneTex; // full scene color
-uniform sampler2D DepthTex; // depth buffer (non-linear depth from 0..1)
+layout(location = 0) out vec4 fragColor;
 
 const int MAX_STEPS = 20;
-const float STEP_SIZE = 0.01; // screen-space step (fraction of screen)
-const float DEPTH_BIAS = 0.02;
+const float STEP_SIZE = 0.01;   // screen-space step (fraction of screen)
+const float DEPTH_BIAS = 0.001; // non-linear depth units, so this is a taste knob
 
-// Screen-space ray-march: march outward in screen UV space
-vec3 ssrSample(vec2 rayStart, vec2 rayDir) {
+// Screen-space ray-march. Depth is 0 at the near plane and 1 at the far one, so
+// the ray has hit something when the scene at that pixel sits in FRONT of where
+// the ray has reached. rayDir.xy is in UV units, normalised so one step covers
+// STEP_SIZE of the screen; rayDir.z is in depth-buffer units, the same mixed
+// space main() reconstructs the normal in.
+vec3 ssrSample(vec2 rayStart, float startDepth, vec3 rayDir) {
     vec2 rayUV = rayStart;
-    float startDepth = texture(DepthTex, rayStart).r;
-    
+    float rayDepth = startDepth;
+
     for (int i = 0; i < MAX_STEPS; ++i) {
-        rayUV += rayDir * STEP_SIZE;
+        rayUV += rayDir.xy * STEP_SIZE;
+        rayDepth += rayDir.z * STEP_SIZE;
         if (rayUV.x < 0.0 || rayUV.x > 1.0 || rayUV.y < 0.0 || rayUV.y > 1.0) break;
-        
-        float sampleDepth = texture(DepthTex, rayUV).r;
-        // Hit test: if sample depth is shallower (larger in [0,1]) than start
-        if (sampleDepth > startDepth + DEPTH_BIAS) {
-            return texture(SceneTex, rayUV).rgb;
+
+        float sampleDepth = texture(DepthTexSampler, rayUV).r;
+        // Hit: this pixel's surface is nearer than the ray, so the ray went behind it.
+        if (sampleDepth < rayDepth - DEPTH_BIAS) {
+            return texture(SceneTexSampler, rayUV).rgb;
         }
     }
     return vec3(0.0); // miss
@@ -32,39 +39,45 @@ vec3 ssrSample(vec2 rayStart, vec2 rayDir) {
 
 void main() {
     // Current pixel
-    vec3 base = texture(SceneTex, uv).rgb;
-    float depthN = texture(DepthTex, uv).r;
+    vec3 base = texture(SceneTexSampler, texCoord).rgb;
+    float depthN = texture(DepthTexSampler, texCoord).r;
 
     // Get screen size from texture
-    vec2 screenSize = vec2(textureSize(DepthTex, 0));
+    vec2 screenSize = vec2(textureSize(DepthTexSampler, 0));
     vec2 texel = 1.0 / screenSize;
 
     // Sample neighboring depth for normal reconstruction
-    vec2 uvR = clamp(uv + vec2(texel.x, 0.0), vec2(0.0), vec2(1.0));
-    vec2 uvL = clamp(uv - vec2(texel.x, 0.0), vec2(0.0), vec2(1.0));
-    vec2 uvU = clamp(uv + vec2(0.0, texel.y), vec2(0.0), vec2(1.0));
-    vec2 uvD = clamp(uv - vec2(0.0, texel.y), vec2(0.0), vec2(1.0));
+    vec2 uvR = clamp(texCoord + vec2(texel.x, 0.0), vec2(0.0), vec2(1.0));
+    vec2 uvL = clamp(texCoord - vec2(texel.x, 0.0), vec2(0.0), vec2(1.0));
+    vec2 uvU = clamp(texCoord + vec2(0.0, texel.y), vec2(0.0), vec2(1.0));
+    vec2 uvD = clamp(texCoord - vec2(0.0, texel.y), vec2(0.0), vec2(1.0));
 
-    float dR = texture(DepthTex, uvR).r;
-    float dL = texture(DepthTex, uvL).r;
-    float dU = texture(DepthTex, uvU).r;
-    float dD = texture(DepthTex, uvD).r;
+    float dR = texture(DepthTexSampler, uvR).r;
+    float dL = texture(DepthTexSampler, uvL).r;
+    float dU = texture(DepthTexSampler, uvU).r;
+    float dD = texture(DepthTexSampler, uvD).r;
 
-    // Estimate surface normal from depth gradients (screen-space derivatives)
-    vec3 ddx = vec3(texel.x, 0.0, (dR - dL) * 0.5);
-    vec3 ddy = vec3(0.0, texel.y, (dU - dD) * 0.5);
-    vec3 N = normalize(cross(ddy, ddx));
+    // Surface tangents in (u, v, depth) space: x right, y up, z away from the
+    // camera. cross(y, x) then points back toward the camera, which is the
+    // outward normal we want.
+    vec3 tangentX = vec3(texel.x, 0.0, (dR - dL) * 0.5);
+    vec3 tangentY = vec3(0.0, texel.y, (dU - dD) * 0.5);
+    vec3 N = normalize(cross(tangentY, tangentX));
 
-    // Simple view direction (screen-space ray toward camera)
-    vec3 V = normalize(vec3(uv * 2.0 - 1.0, 1.0));
-    vec3 R = reflect(V, clamp(N, -1.0, 1.0));
+    // Ray from the camera through this pixel, pointing into the scene (+z).
+    vec3 I = normalize(vec3(texCoord * 2.0 - 1.0, 1.0));
+    vec3 R = reflect(I, N);
 
-    // Project reflection into screen-space ray direction
-    vec2 rayDir = normalize(R.xy);
-    vec3 hitColor = ssrSample(uv, rayDir);
+    // Fresnel-based blend: reflections stronger at grazing angles, near zero
+    // where the surface faces the camera head on (-I aligned with N).
+    float fresnel = pow(1.0 - clamp(dot(N, -I), 0.0, 1.0), 5.0);
 
-    // Fresnel-based blend: reflections stronger at grazing angles
-    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
+    // A reflection aimed straight back at the camera has no screen-space
+    // direction to march along, and normalising it would hand NaNs to texture().
+    float spread = length(R.xy);
+    vec3 hitColor = spread > 1e-5 ? ssrSample(texCoord, depthN, R / spread)
+                                  : vec3(0.0);
+
     vec3 final = mix(base, hitColor, fresnel * 0.5); // reduced blend strength for subtlety
 
     fragColor = vec4(final, 1.0);
