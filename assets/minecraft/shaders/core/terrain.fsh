@@ -178,7 +178,8 @@ void doFog(inout vec3 color) {
 
     vec3 inscatter = (1.0 - transmittance) * FogColor.rgb;
 
-    color = apply_fog(color, sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor);
+    // apply_fog works in vec4, so wrap and unwrap around it.
+    color = apply_fog(vec4(color, 1.0), sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
     color = inscatter + color * transmittance;
 }
 

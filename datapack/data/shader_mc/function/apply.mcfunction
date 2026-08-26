@@ -1,7 +1,9 @@
-# Post effects live in the player's saved data, so this only has to run once per
-# player per world -- the advancement that calls it never fires again. Order is
-# the order they are applied in: reflections first, then bloom over them, then
-# depth of field last so it blurs the finished image.
+# Post effects are saved in the player's data, so this only has to land once.
+# Order is the order they are applied in: reflections, then the light shafts they
+# should be lit by, then bloom over both, then depth of field on the finished
+# image.
 posteffect add @s minecraft:ssr
+posteffect add @s minecraft:volumetric
 posteffect add @s minecraft:bloom
 posteffect add @s minecraft:dof
+scoreboard players set @s shader_mc.applied 4

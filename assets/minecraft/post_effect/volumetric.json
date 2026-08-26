@@ -1,0 +1,201 @@
+{
+    "targets": {
+        "mask": {},
+        "mask_temp": {},
+        "mask_blur": {},
+        "sun": {
+            "width": 1,
+            "height": 1
+        },
+        "shafts": {},
+        "swap": {}
+    },
+    "passes": [
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_mask",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "minecraft:main"
+                },
+                {
+                    "sampler_name": "DepthTex",
+                    "target": "minecraft:main",
+                    "use_depth_buffer": true
+                }
+            ],
+            "output": "mask",
+            "uniforms": {
+                "VolMaskConfig": [
+                    {
+                        "name": "SkyThreshold",
+                        "type": "float",
+                        "value": 0.8
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "mask",
+                    "bilinear": true
+                }
+            ],
+            "output": "mask_temp",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 24.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "mask_temp",
+                    "bilinear": true
+                }
+            ],
+            "output": "mask_blur",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 24.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_sun",
+            "inputs": [
+                {
+                    "sampler_name": "MaskTex",
+                    "target": "mask_blur"
+                }
+            ],
+            "output": "sun",
+            "uniforms": {
+                "VolSunConfig": [
+                    {
+                        "name": "SunGain",
+                        "type": "float",
+                        "value": 6.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_rays",
+            "inputs": [
+                {
+                    "sampler_name": "MaskTex",
+                    "target": "mask"
+                },
+                {
+                    "sampler_name": "SunTex",
+                    "target": "sun"
+                }
+            ],
+            "output": "shafts",
+            "uniforms": {
+                "VolRaysConfig": [
+                    {
+                        "name": "Density",
+                        "type": "float",
+                        "value": 0.9
+                    },
+                    {
+                        "name": "Decay",
+                        "type": "float",
+                        "value": 0.96
+                    },
+                    {
+                        "name": "Exposure",
+                        "type": "float",
+                        "value": 1.2
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_composite",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "minecraft:main"
+                },
+                {
+                    "sampler_name": "ShaftTex",
+                    "target": "shafts"
+                }
+            ],
+            "output": "swap",
+            "uniforms": {
+                "VolConfig": [
+                    {
+                        "name": "Intensity",
+                        "type": "float",
+                        "value": 0.8
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/blit",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "swap"
+                }
+            ],
+            "output": "minecraft:main",
+            "uniforms": {
+                "BlitConfig": [
+                    {
+                        "name": "ColorModulate",
+                        "type": "vec4",
+                        "value": [
+                            1.0,
+                            1.0,
+                            1.0,
+                            1.0
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
