@@ -2,6 +2,6 @@
   "pack": {
     "min_format": 96,
     "max_format": 96,
-    "description": "Renders terrain surface normals as colour."
+    "description": "Provides vibrant visuals-style shaders fpr Java."
   }
 }

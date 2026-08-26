@@ -107,6 +107,7 @@ vec3 geometricNormal(vec3 cameraRelative) {
 
 vec3 getLighting() {
     const float shininess = 0.5;
+    const vec3 sunColor = vec3(0.9294, 0.7333, 0.6196);
 
     vec4 texColor = sampleTexture();
 
@@ -119,7 +120,7 @@ vec3 getLighting() {
     vec3 R = reflect(-L, N);                  // reflection vector
 
     // Ambient term
-    float ambient = 0.2;
+    float ambient = 0.5;
 
     // Diffuse term
     float diff = max(dot(N, L), 0.0);
@@ -132,17 +133,17 @@ vec3 getLighting() {
     // Final color
     float lighting = ambient + diffuse;
 
-    vec3 litColor = lighting * texColor.rgb + vec3(specular);
+    vec3 litColor = lighting * texColor.rgb + specular * sunColor;
 
     float lightmap = value(vertexColor.rgb);
 
-    litColor = clamp(mix(lightmap * texColor.rgb + specular * lightmap, litColor, lightmap), 0.0, 1.0);
+    litColor = clamp(mix(lightmap * texColor.rgb + specular * lightmap * sunColor, litColor, lightmap), 0.0, 1.0);
 
     return litColor;
 }
 
 void doFog(inout vec3 color) {
-    const float density = 0.01; // base extinction coefficient
+    const float density = 0.03; // base extinction coefficient
 
     // distances
     float dist = sphericalVertexDistance;
@@ -160,20 +161,24 @@ void doFog(inout vec3 color) {
     float fogStart = mix(renderStart, envStart, fogValue);
     float fogEnd = mix(renderEnd, envEnd, fogValue);
 
+    fogStart *= 0.5; // starts closer to camera
+
     float rangeLen = max(0.0001, fogEnd - fogStart);
     float rangeFactor = clamp((dist - fogStart) / rangeLen, 0.0, 1.0);
 
     // height-based falloff reduces density above the camera
     float height = cameraRelativePos.y;
-    float heightFalloff = 0.02;
+    float heightFalloff = 0.01;
 
     float localDensity = density * exp(-heightFalloff * max(height, 0.0));
+    localDensity *= 1.5; // intensity multiplier
 
     float tau = localDensity * dist * rangeFactor;
     float transmittance = exp(-tau);
 
     vec3 inscatter = (1.0 - transmittance) * FogColor.rgb;
 
+    color = apply_fog(color, sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor);
     color = inscatter + color * transmittance;
 }
 
