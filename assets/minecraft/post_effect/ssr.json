@@ -15,10 +15,6 @@
                     "sampler_name": "DepthTex",
                     "target": "minecraft:main",
                     "use_depth_buffer": true
-                },
-                {
-                    "sampler_name": "AlphaTex",
-                    "target": "minecraft:translucent"
                 }
             ],
             "output": "swap",
@@ -42,7 +38,17 @@
                     {
                         "name": "DebugView",
                         "type": "float",
+                        "value": 5.0
+                    },
+                    {
+                        "name": "MaskMode",
+                        "type": "float",
                         "value": 0.0
+                    },
+                    {
+                        "name": "MaskLevel",
+                        "type": "float",
+                        "value": 0.5
                     }
                 ]
             }

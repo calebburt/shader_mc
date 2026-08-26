@@ -5,7 +5,6 @@
 // Sampler names are the post_effect pass sampler_name + "Sampler".
 uniform sampler2D SceneTexSampler; // full scene color
 uniform sampler2D DepthTexSampler; // reversed-Z depth: see linearZ() below
-uniform sampler2D AlphaTexSampler; // mask of where to apply effect
 
 // A post pass is handed the screen quad's own projection, not the camera's, so
 // the field of view has to come in through the pass. TanHalfFov is
@@ -16,6 +15,8 @@ layout(std140) uniform SsrConfig {
     float Strength;
     float Reflectance;
     float DebugView;
+    float MaskMode;
+    float MaskLevel;
 };
 
 layout(location = 0) in vec2 texCoord;
@@ -50,6 +51,21 @@ const int RAY_OFF_SCREEN = 4;
 // the near plane, flattening every reconstructed normal to face the camera.
 float linearZ(float depth) {
     return 1.0 / max(depth, 1e-7);
+}
+
+// Which surfaces the effect is allowed on. There is no translucent-only target
+// to sample in this version -- OIT resolves translucency into main before any
+// post pass runs, and PostChain rejects a chain that names a target the context
+// does not provide -- so the only per-pixel tag that can reach here is main's
+// own alpha channel. DebugView 5 shows what it actually holds.
+//   MaskMode 0: every surface
+//   MaskMode 1: only where main's alpha is below MaskLevel
+//   MaskMode 2: only where main's alpha is at or above MaskLevel
+float surfaceMask(float alpha) {
+    int mode = int(MaskMode + 0.5);
+    if (mode == 1) return alpha < MaskLevel ? 1.0 : 0.0;
+    if (mode == 2) return alpha >= MaskLevel ? 1.0 : 0.0;
+    return 1.0;
 }
 
 // View-space position of a pixel, in units of the near plane distance. Working
@@ -114,7 +130,8 @@ vec4 march(vec3 origin, vec3 dir, vec2 lens, out int outcome) {
 }
 
 void main() {
-    vec3 base = texture(SceneTexSampler, texCoord).rgb;
+    vec4 scene = texture(SceneTexSampler, texCoord);
+    vec3 base = scene.rgb;
     float depth = texture(DepthTexSampler, texCoord).r;
     int debug = 0;
     if (depth <= SKY_DEPTH) {
@@ -164,7 +181,7 @@ void main() {
 
     int outcome;
     vec4 hit = march(P, R, lens, outcome);
-    float weight = fresnel * Strength * flatness * hit.a * texture(AlphaTexSampler, uv);
+    float weight = fresnel * Strength * flatness * hit.a * surfaceMask(scene.a);
 
     // DebugView, set in ssr.json: 0 renders normally, the rest answer "which
     // stage gave up on this pixel?" without needing a debugger in the game.
@@ -182,6 +199,17 @@ void main() {
         fragColor = vec4(c, 1.0);
     } else if (debug == 4) {                // how strong the reflection came out
         fragColor = vec4(vec3(weight), 1.0);
+    } else if (debug == 5) {                // what main's alpha channel holds
+        // The only channel that could carry a material tag from world rendering
+        // into this pass, since no translucent-only target exists to read.
+        fragColor = vec4(vec3(scene.a), 1.0);
+    } else if (debug == 5) {
+        // main's alpha channel. There is no translucent target to isolate in
+        // this version -- OIT resolves translucency into main before any post
+        // pass runs -- so alpha is the only channel left that could carry a
+        // "this pixel is water" tag. Red where it is 0, green where it is 1.
+        float a = texture(SceneTexSampler, texCoord).a;
+        fragColor = vec4(1.0 - a, a, 0.0, 1.0);
     } else {
         fragColor = vec4(mix(base, hit.rgb, weight), 1.0);
     }

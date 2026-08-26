@@ -22,6 +22,15 @@ MULTIDRAW = {"terrain"}
 BACKEND_MACROS = ["RENDERPEARL_DEPTH_IS_ZERO_TO_ONE",
                   "RENDERPEARL_EXPLICIT_DEPTH_INVARIANCE"]
 
+# Targets a post chain may name besides the ones it declares itself. PostChain
+# checks referenced targets against the set its calling context allows and throws
+# if anything is left over -- and a chain that fails to load runs no passes at
+# all, so a bad target silently turns the whole effect off rather than erroring
+# in the game. Translucency has no target of its own in this version: OIT
+# resolves it into main before post-processing runs.
+EXTERNAL_TARGETS = {"minecraft:main"}
+CHAIN_EXTRA_TARGETS = {"entity_outline.json": {"minecraft:entity_outline"}}
+
 # Uniform blocks PostPass binds itself, so a post shader may declare them
 # without the post_effect json listing them. Blocks that arrive through a vanilla
 # include (Globals, Projection, ...) are engine-owned too, and are excluded by
@@ -277,6 +286,27 @@ def check_pass_interface(vsh, fsh, provided_samplers, provided_blocks):
                         "provide" % name)
     return problems
 
+def qualify(name):
+    """Identifiers default to the minecraft namespace, as the codec does."""
+    return name if ":" in name else "minecraft:" + name
+
+def check_chain_targets(filename, chain):
+    """Every target a pass names must be declared by the chain or allowed here."""
+    declared = {qualify(name) for name in chain.get("targets", {})}
+    allowed = EXTERNAL_TARGETS | CHAIN_EXTRA_TARGETS.get(filename, set())
+    problems = []
+    for i, chain_pass in enumerate(chain.get("passes", [])):
+        named = {qualify(inp["target"]) for inp in chain_pass.get("inputs", [])
+                 if "target" in inp}
+        if "output" in chain_pass:
+            named.add(qualify(chain_pass["output"]))
+        for target in sorted(named - declared - allowed):
+            problems.append(
+                "pass %d names target %s, which the chain does not declare and "
+                "the game does not provide (available here: %s)"
+                % (i, target, ", ".join(sorted(allowed))))
+    return problems
+
 def shader_source(shader_id, ext):
     """Pack source for a shader id like 'minecraft:post/ssr', else vanilla."""
     name = shader_id.split(":", 1)[-1] + ext
@@ -340,6 +370,20 @@ if os.path.isdir(post_effect):
         if not filename.endswith(".json"):
             continue
         chain = json.load(open(os.path.join(post_effect, filename)))
+
+        target_problems = check_chain_targets(filename, chain)
+        if target_problems:
+            failed += 1
+            print("  FAIL  %s  (targets)" % filename)
+            for problem in target_problems:
+                print("          %s" % problem)
+            print("          a chain that fails to load runs none of its passes, so"
+                  " the effect")
+            print("          just stops happening with nothing shown in game")
+        else:
+            passed += 1
+            print("  PASS  %s  (targets)" % filename)
+
         for i, chain_pass in enumerate(chain.get("passes", [])):
             for key, ext, stage in (("vertex_shader", ".vsh", VERT),
                                     ("fragment_shader", ".fsh", FRAG)):
