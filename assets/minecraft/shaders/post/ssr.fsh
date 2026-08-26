@@ -5,6 +5,7 @@
 // Sampler names are the post_effect pass sampler_name + "Sampler".
 uniform sampler2D SceneTexSampler; // full scene color
 uniform sampler2D DepthTexSampler; // reversed-Z depth: see linearZ() below
+uniform sampler2D AlphaTexSampler; // mask of where to apply effect
 
 // A post pass is handed the screen quad's own projection, not the camera's, so
 // the field of view has to come in through the pass. TanHalfFov is
@@ -115,7 +116,7 @@ vec4 march(vec3 origin, vec3 dir, vec2 lens, out int outcome) {
 void main() {
     vec3 base = texture(SceneTexSampler, texCoord).rgb;
     float depth = texture(DepthTexSampler, texCoord).r;
-    int debug = int(DebugView + 0.5);
+    int debug = 0;
     if (depth <= SKY_DEPTH) {
         // Sky pixel: nothing to reflect off. Black in every debug view.
         fragColor = vec4(debug == 0 ? base : vec3(0.0), 1.0);
@@ -163,7 +164,7 @@ void main() {
 
     int outcome;
     vec4 hit = march(P, R, lens, outcome);
-    float weight = fresnel * Strength * flatness * hit.a;
+    float weight = fresnel * Strength * flatness * hit.a * texture(AlphaTexSampler, uv);
 
     // DebugView, set in ssr.json: 0 renders normally, the rest answer "which
     // stage gave up on this pixel?" without needing a debugger in the game.
@@ -184,4 +185,6 @@ void main() {
     } else {
         fragColor = vec4(mix(base, hit.rgb, weight), 1.0);
     }
+
+    fragColor = texture(AlphaTexSampler, uv);
 }

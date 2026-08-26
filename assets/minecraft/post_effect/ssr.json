@@ -15,6 +15,10 @@
                     "sampler_name": "DepthTex",
                     "target": "minecraft:main",
                     "use_depth_buffer": true
+                },
+                {
+                    "sampler_name": "AlphaTex",
+                    "target": "minecraft:translucent"
                 }
             ],
             "output": "swap",
