@@ -1,5 +1,8 @@
 {
     "targets": {
+        "reflect": {},
+        "blur_temp": {},
+        "blurred": {},
         "swap": {}
     },
     "passes": [
@@ -17,7 +20,7 @@
                     "use_depth_buffer": true
                 }
             ],
-            "output": "swap",
+            "output": "reflect",
             "uniforms": {
                 "SsrConfig": [
                     {
@@ -39,16 +42,102 @@
                         "name": "DebugView",
                         "type": "float",
                         "value": 0.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "reflect",
+                    "bilinear": true
+                }
+            ],
+            "output": "blur_temp",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
                     },
                     {
-                        "name": "MaskMode",
+                        "name": "Radius",
                         "type": "float",
-                        "value": 2.0
+                        "value": 6.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "blur_temp",
+                    "bilinear": true
+                }
+            ],
+            "output": "blurred",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
                     },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 6.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/ssr_composite",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "minecraft:main"
+                },
+                {
+                    "sampler_name": "SharpTex",
+                    "target": "reflect"
+                },
+                {
+                    "sampler_name": "BlurTex",
+                    "target": "blurred"
+                }
+            ],
+            "output": "swap",
+            "uniforms": {
+                "SsrCompositeConfig": [
                     {
                         "name": "MaskLevel",
                         "type": "float",
                         "value": 0.5
+                    },
+                    {
+                        "name": "RoughStrength",
+                        "type": "float",
+                        "value": 0.35
+                    },
+                    {
+                        "name": "DebugView",
+                        "type": "float",
+                        "value": 0.0
                     }
                 ]
             }

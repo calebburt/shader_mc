@@ -15,8 +15,6 @@ layout(std140) uniform SsrConfig {
     float Strength;
     float Reflectance;
     float DebugView;
-    float MaskMode;
-    float MaskLevel;
 };
 
 layout(location = 0) in vec2 texCoord;
@@ -53,21 +51,6 @@ float linearZ(float depth) {
     return 1.0 / max(depth, 1e-7);
 }
 
-// Which surfaces the effect is allowed on. There is no translucent-only target
-// to sample in this version -- OIT resolves translucency into main before any
-// post pass runs, and PostChain rejects a chain that names a target the context
-// does not provide -- so the only per-pixel tag that can reach here is main's
-// own alpha channel. DebugView 5 shows what it actually holds.
-//   MaskMode 0: every surface
-//   MaskMode 1: only where main's alpha is below MaskLevel
-//   MaskMode 2: only where main's alpha is at or above MaskLevel
-float surfaceMask(float alpha) {
-    int mode = int(MaskMode + 0.5);
-    if (mode == 1) return alpha < MaskLevel ? 1.0 : 0.0;
-    if (mode == 2) return alpha >= MaskLevel ? 1.0 : 0.0;
-    return 1.0;
-}
-
 // View-space position of a pixel, in units of the near plane distance. Working
 // in those units means the near plane cancels out of every direction and ratio
 // below, so its value never has to be known here. z grows away from the camera.
@@ -81,6 +64,8 @@ vec2 viewToUv(vec3 p, vec2 lens) {
     return (p.xy / (p.z * lens)) * 0.5 + 0.5;
 }
 
+// This pass does not touch the scene: it writes the reflection alone, premultiplied
+// by its strength, for the blur and composite passes in ssr.json to finish.
 // March the reflected ray through view space, projecting each sample back to
 // screen to compare it against the depth buffer. Returns the reflected color in
 // rgb and how much to trust it in a: zero means the ray found nothing, and the
@@ -131,12 +116,11 @@ vec4 march(vec3 origin, vec3 dir, vec2 lens, out int outcome) {
 
 void main() {
     vec4 scene = texture(SceneTexSampler, texCoord);
-    vec3 base = scene.rgb;
     float depth = texture(DepthTexSampler, texCoord).r;
     int debug = 0;
     if (depth <= SKY_DEPTH) {
-        // Sky pixel: nothing to reflect off. Black in every debug view.
-        fragColor = vec4(debug == 0 ? base : vec3(0.0), 1.0);
+        // Sky pixel: nothing to reflect off, so contribute nothing.
+        fragColor = debug == 0 ? vec4(0.0) : vec4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
@@ -167,7 +151,7 @@ void main() {
     float flatness = smoothstep(FLAT_MIN, FLAT_MAX, dot(nFwd, nBwd));
     if (flatness <= 0.0) {
         // Edge or silhouette: the normal here is not usable. Grey when debugging.
-        fragColor = vec4(debug == 0 ? base : vec3(0.25), 1.0);
+        fragColor = debug == 0 ? vec4(0.0) : vec4(vec3(0.25), 1.0);
         return;
     }
     vec3 N = normalize(nFwd + nBwd);
@@ -181,7 +165,7 @@ void main() {
 
     int outcome;
     vec4 hit = march(P, R, lens, outcome);
-    float weight = fresnel * Strength * flatness * hit.a * surfaceMask(scene.a);
+    float weight = fresnel * Strength * flatness * hit.a;
 
     // DebugView, set in ssr.json: 0 renders normally, the rest answer "which
     // stage gave up on this pixel?" without needing a debugger in the game.
@@ -211,6 +195,9 @@ void main() {
         float a = texture(SceneTexSampler, texCoord).a;
         fragColor = vec4(1.0 - a, a, 0.0, 1.0);
     } else {
-        fragColor = vec4(mix(base, hit.rgb, weight), 1.0);
+        // Premultiplied by the weight, so a box blur can spread this without
+        // dragging in black from pixels whose ray found nothing. ssr_composite
+        // does the blending over the scene.
+        fragColor = vec4(hit.rgb * weight, weight);
     }
 }
