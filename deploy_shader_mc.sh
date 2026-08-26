@@ -47,3 +47,23 @@ cp -a "$SRC_DIR/pack.mcmeta" "$DEST_DIR/"
 cp -a "$SRC_DIR/assets" "$DEST_DIR/"
 
 echo "Installed shader pack to: $DEST_DIR"
+
+# With a world name, also install the companion data pack, which applies the post
+# effect to each player so it does not have to be turned on by hand. The game has
+# no always-on hook for a post chain, but /posteffect state is saved in the
+# player's data, so the advancement behind this fires once and then never again.
+#
+#   ./deploy_shader_mc.sh "Shader Test"
+WORLD="${1:-}"
+if [ -n "$WORLD" ]; then
+  WORLD_DIR="$MC_DIR/saves/$WORLD"
+  if [ ! -d "$WORLD_DIR" ]; then
+    echo "No world at $WORLD_DIR" >&2
+    exit 1
+  fi
+  DATA_DEST="$WORLD_DIR/datapacks/$PACK_NAME"
+  rm -rf "$DATA_DEST"
+  mkdir -p "$DATA_DEST"
+  cp -a "$SRC_DIR/datapack/." "$DATA_DEST/"
+  echo "Installed data pack to: $DATA_DEST"
+fi

@@ -39,5 +39,7 @@ void main() {
     // Both reflections are premultiplied, so this composites without the dark
     // fringes a straight mix would leave wherever the blur spread colour into
     // pixels that found nothing to reflect.
-    fragColor = vec4(scene.rgb * (1.0 - refl.a) + refl.rgb, 1.0);
+    // Alpha passes through untouched: it carries terrain.fsh's opaque tag, and
+    // the bloom and dof chains may run after this one.
+    fragColor = vec4(scene.rgb * (1.0 - refl.a) + refl.rgb, scene.a);
 }

@@ -1,0 +1,10 @@
+{
+    "criteria": {
+        "present": {
+            "trigger": "minecraft:tick"
+        }
+    },
+    "rewards": {
+        "function": "shader_mc:apply"
+    }
+}
