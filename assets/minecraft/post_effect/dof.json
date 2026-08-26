@@ -29,7 +29,7 @@
                     {
                         "name": "Radius",
                         "type": "float",
-                        "value": 6.0
+                        "value": 10.0
                     }
                 ]
             }
@@ -58,7 +58,7 @@
                     {
                         "name": "Radius",
                         "type": "float",
-                        "value": 6.0
+                        "value": 10.0
                     }
                 ]
             }
@@ -85,9 +85,19 @@
             "uniforms": {
                 "DofConfig": [
                     {
-                        "name": "FocusScale",
+                        "name": "AutoFocus",
                         "type": "float",
-                        "value": 40.0
+                        "value": 1.0
+                    },
+                    {
+                        "name": "FocusDistance",
+                        "type": "float",
+                        "value": 8.0
+                    },
+                    {
+                        "name": "Aperture",
+                        "type": "float",
+                        "value": 4.0
                     },
                     {
                         "name": "HandCutoff",
