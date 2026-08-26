@@ -26,7 +26,7 @@ const float STEP_FRACTION = 0.03; // first step, as a fraction of pixel distance
 const float STEP_GROWTH = 1.15;   // each step reaches a little further than the last
 const float SELF_BIAS = 0.005;    // ignore hits this close to the ray, relatively
 const float THICKNESS = 0.25;     // how far behind a surface still counts as a hit
-const float SKY_DEPTH = 1e-6;     // at or below this, nothing was drawn here
+const float SKY_DEPTH = 1e-3;     // at or below this, nothing was drawn here
 const float BORDER_FADE = 0.08;   // fade hits out this far from the screen edge
 const float FLAT_MIN = 0.40;      // normal agreement: below this is an edge
 const float FLAT_MAX = 0.85;      // and above this is a surface
@@ -95,12 +95,12 @@ vec4 march(vec3 origin, vec3 dir, vec2 lens, out int outcome) {
         float fade = min(border.x, border.y);
 
         float depth = texture(DepthTexSampler, uv).r;
-        if (depth <= SKY_DEPTH) {
-            // The sky is a perfectly good thing to see reflected, and over open
-            // ground it is the only thing an upward ray can ever reach.
-            outcome = RAY_SKY;
-            return vec4(texture(SceneTexSampler, uv).rgb, fade);
-        }
+        // if (depth <= SKY_DEPTH) {
+        //     // The sky is a perfectly good thing to see reflected, and over open
+        //     // ground it is the only thing an upward ray can ever reach.
+        //     outcome = RAY_SKY;
+        //     return vec4(texture(SceneTexSampler, uv).rgb, fade);
+        // }
 
         float sceneZ = linearZ(depth);
         float behind = p.z - sceneZ;
