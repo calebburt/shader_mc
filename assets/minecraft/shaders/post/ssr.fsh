@@ -185,6 +185,4 @@ void main() {
     } else {
         fragColor = vec4(mix(base, hit.rgb, weight), 1.0);
     }
-
-    fragColor = texture(AlphaTexSampler, uv);
 }
