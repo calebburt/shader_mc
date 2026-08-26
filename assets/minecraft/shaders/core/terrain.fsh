@@ -205,6 +205,17 @@ void main() {
 
     vec3 baseScene = clamp(mix(vec3(lightmap * texColor.rgb), litColor, lightmap), 0.0, 1.0);
 
+    #ifdef OIT
     fragColor = vec4(baseScene, vertexColor.a);
+    #else
+    // Opaque terrain tags itself in main's alpha with 0, so the ssr post pass can
+    // tell it apart from translucent surfaces. There is no translucent-only
+    // target to sample in this version -- OIT resolves translucency into main
+    // before any post pass runs -- and this alpha channel is read by nothing
+    // else. Translucent terrain goes through OIT, where fragColor's alpha is
+    // coverage and must not be touched, and reaches main via the composite with
+    // a high alpha instead. Drop the #ifdef to undo.
+    fragColor = vec4(baseScene, 0.0);
+    #endif
     #endif
 }
