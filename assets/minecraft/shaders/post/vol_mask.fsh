@@ -15,7 +15,7 @@ layout(location = 0) in vec2 texCoord;
 
 layout(location = 0) out vec4 fragColor;
 
-const float SKY_DEPTH = 1e-6;
+const float SKY_DEPTH = 1e-2;
 
 void main() {
     // Reversed-Z: depth 0 means nothing was drawn, which is open sky. Anything
