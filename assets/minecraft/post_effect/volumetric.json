@@ -8,6 +8,7 @@
             "height": 1
         },
         "shafts": {},
+        "fog": {},
         "swap": {}
     },
     "passes": [
@@ -31,7 +32,7 @@
                     {
                         "name": "SkyThreshold",
                         "type": "float",
-                        "value": 0.8
+                        "value": 0.83
                     }
                 ]
             }
@@ -150,6 +151,22 @@
         },
         {
             "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_fog",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "minecraft:main"
+                },
+                {
+                    "sampler_name": "DepthTex",
+                    "target": "minecraft:main",
+                    "use_depth_buffer": true
+                }
+            ],
+            "output": "fog"
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
             "fragment_shader": "minecraft:post/vol_composite",
             "inputs": [
                 {
@@ -159,13 +176,22 @@
                 {
                     "sampler_name": "ShaftTex",
                     "target": "shafts"
+                },
+                {
+                    "sampler_name": "FogTex",
+                    "target": "fog"
                 }
             ],
             "output": "swap",
             "uniforms": {
                 "VolConfig": [
                     {
-                        "name": "Intensity",
+                        "name": "ShaftIntensity",
+                        "type": "float",
+                        "value": 0.8
+                    },
+                    {
+                        "name": "FogIntensity",
                         "type": "float",
                         "value": 0.8
                     }

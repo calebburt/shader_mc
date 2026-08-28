@@ -81,24 +81,44 @@ def vanilla(path):
     except KeyError:
         return None
 
-def resolve(source, seen=None):
+def resolve(source, seen=None, filename="<root>"):
     seen = set() if seen is None else seen
     out = []
-    for line in source.splitlines():
+    lines = source.splitlines()
+
+    for i, line in enumerate(lines, start=1):
         m = re.match(r"\s*#(?:moj_import|include)\s*<minecraft:([\w./]+)>", line)
         if not m:
+            # preserve original line numbers
+            out.append(f"#line {i}")
             out.append(line)
             continue
+
         name = m.group(1)
         if name in seen:
             continue
         seen.add(name)
+
         body = vanilla("include/" + name)
         if body is None:
+            out.append(f"#line {i}")
             out.append("#error missing include " + name)
             continue
-        out.append(resolve("\n".join(
-            l for l in body.splitlines() if not l.startswith("#version")), seen))
+
+        # # before include: tell shaderc where we are
+        out.append(f"#line 1")
+
+        # recursively resolve include
+        resolved = resolve(
+            "\n".join(l for l in body.splitlines() if not l.startswith("#version")),
+            seen,
+            filename=name
+        )
+        out.append(resolved)
+
+        # # after include: restore parent file line numbers
+        # out.append(f"#line {i+1} \"{filename}\"")
+
     return "\n".join(out)
 
 def build(source, defines):
@@ -335,7 +355,7 @@ def report(label, ok, log, vanilla_source=None, defines=None, stage=None):
         return
     if vanilla_source and not compile(vanilla_source, defines, stage, label)[0]:
         skipped += 1
-        print("  SKIP  %s  (vanilla fails here too -- needs engine defines)" % label)
+        print("  SKIP  %s  (vanilla fails here too - needs engine defines)" % label)
         return
     failed += 1
     print("  FAIL  %s" % label)

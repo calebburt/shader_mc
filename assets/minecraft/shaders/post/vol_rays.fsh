@@ -40,5 +40,5 @@ void main() {
         illumination *= Decay;
     }
 
-    fragColor = gathered * (Exposure / float(SAMPLES) * 2) * sun.b;
+    fragColor = gathered * (Exposure / float(SAMPLES)) * sun.b;
 }
