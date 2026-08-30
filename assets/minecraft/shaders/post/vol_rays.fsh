@@ -20,7 +20,7 @@ layout(location = 0) out vec4 fragColor;
 const int SAMPLES = 32;
 
 void main() {
-    vec4 sun = texture(SunTexSampler, vec2(0.5));
+    vec4 sun = texture(SunTexSampler, vec2(0.0));
     if (sun.b <= 0.0) {
         fragColor = vec4(0.0); // no light in view, so no shafts
         return;

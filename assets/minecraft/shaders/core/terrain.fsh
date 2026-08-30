@@ -143,44 +143,9 @@ vec3 getLighting() {
 }
 
 void doFog(inout vec3 color) {
-    const float density = 0.03; // base extinction coefficient
-
-    // distances
-    float dist = sphericalVertexDistance;
-
-    // resolve environment and render ranges
-    float envStart = FogEnvironmentalStart;
-    float envEnd = FogEnvironmentalEnd;
-    float renderStart = FogRenderDistanceStart;
-    float renderEnd = FogRenderDistanceEnd;
-
-    // overall fog influence in [0,1]
-    float fogValue = total_fog_value(sphericalVertexDistance, cylindricalVertexDistance, envStart, envEnd, renderStart, renderEnd);
-
-    // compute fogStart/fogEnd influenced by the combined fogValue
-    float fogStart = mix(renderStart, envStart, fogValue);
-    float fogEnd = mix(renderEnd, envEnd, fogValue);
-
-    fogStart *= 0.5; // starts closer to camera
-
-    float rangeLen = max(0.0001, fogEnd - fogStart);
-    float rangeFactor = clamp((dist - fogStart) / rangeLen, 0.0, 1.0);
-
-    // height-based falloff reduces density above the camera
-    float height = cameraRelativePos.y;
-    float heightFalloff = 0.01;
-
-    float localDensity = density * exp(-heightFalloff * max(height, 0.0));
-    localDensity *= 1.5; // intensity multiplier
-
-    float tau = localDensity * dist * rangeFactor;
-    float transmittance = exp(-tau);
-
-    vec3 inscatter = (1.0 - transmittance) * FogColor.rgb;
-
     // apply_fog works in vec4, so wrap and unwrap around it.
-    color = apply_fog(vec4(color, 1.0), sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
-    color = inscatter + color * transmittance;
+    vec3 fog_color = apply_fog(vec4(color, 1.0), sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
+    color = mix(fog_color, color, chunkVisibility);
 }
 
 void main() {
@@ -215,12 +180,11 @@ void main() {
     fragColor = vec4(baseScene, vertexColor.a);
     #else
     // Opaque terrain tags itself in main's alpha with 0, so the ssr post pass can
-    // tell it apart from translucent surfaces. There is no translucent-only
-    // target to sample in this version -- OIT resolves translucency into main
-    // before any post pass runs -- and this alpha channel is read by nothing
-    // else. Translucent terrain goes through OIT, where fragColor's alpha is
-    // coverage and must not be touched, and reaches main via the composite with
-    // a high alpha instead. Drop the #ifdef to undo.
+    // tell it apart from translucent surfaces. Translucent terrain goes through
+    // OIT in fabulous, where fragColor's alpha is coverage and must not be touched,
+    // and reaches main via the composite with a high alpha instead. But in non-
+    // fabulous, OIT is off, and alpha is still significant, so handle that path too.
+    
     fragColor = vec4(baseScene, 0.0);
     #endif
     #endif

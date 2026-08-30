@@ -2,6 +2,7 @@
 #extension GL_ARB_separate_shader_objects : require
 
 uniform sampler2D MaskTexSampler; // the light mask, blurred
+uniform sampler2D SceneTexSampler;
 
 // SunGain scales how much found light counts as full strength, which sets how
 // quickly the shafts fade up as the sun comes into view.
@@ -32,9 +33,13 @@ void main() {
         }
     }
 
-    // rg: where the light is. b: how much of it was found, so the rays pass can
-    // fade out when the sun sets, goes behind a hill, or leaves the screen.
     vec2 center = total > 0.0 ? weighted / total : vec2(0.5);
-    float strength = clamp(total / float(GRID * GRID) * SunGain, 0.0, 1.0);
-    fragColor = vec4(center, strength, 1.0);
+    if (texCoord.x < 0.5) {
+        // rg: where the light is. b: how much of it was found, so the rays pass can
+        // fade out when the sun sets, goes behind a hill, or leaves the screen.
+        float strength = clamp(total / float(GRID * GRID) * SunGain, 0.0, 1.0);
+        fragColor = vec4(center, strength, 1.0);
+    } else {
+        fragColor = texture(SceneTexSampler, center);
+    }
 }

@@ -1,9 +1,9 @@
-const int MAX_STEPS = 24;
+const int MAX_STEPS = 50;
 const float STEP_FRACTION = 0.03; // first step, as a fraction of pixel distance
 const float STEP_GROWTH = 1.15;   // each step reaches a little further than the last
 const float SELF_BIAS = 0.005;    // ignore hits this close to the ray, relatively
 const float THICKNESS = 0.25;     // how far behind a surface still counts as a hit
-const float SKY_DEPTH = 1e-3;     // at or below this, nothing was drawn here
+const float SKY_DEPTH = 2e-4;     // at or below this, nothing was drawn here
 const float BORDER_FADE = 0.08;   // fade hits out this far from the screen edge
 const float FLAT_MIN = 0.40;      // normal agreement: below this is an edge
 const float FLAT_MAX = 0.85;      // and above this is a surface

@@ -1,69 +1,61 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
-#include <minecraft:ssr.glsl>
-
 uniform sampler2D SceneTexSampler;
 uniform sampler2D DepthTexSampler;
+uniform sampler2D SunTexSampler;
 
 layout(location = 0) in vec2 texCoord;
-
 layout(location = 0) out vec4 fragColor;
 
-const int SAMPLES = 8;
-const float DENSITY = 0.1;
-const float TanHalfFov = 0.7002;
+// Fog tuning
+const float FOG_DENSITY = 0.001;
+const float FOG_START   = 40.0;
+const float FOG_END     = 1800.0;
 
-float sampleFogHit(float density, float xi) {
-    // extinction coefficient (sigma_t)
-    float sigma_t = density;
+// Base fallback fog color
+const vec3 FOG_COLOR_BASE = vec3(0.70, 0.75, 0.80);
 
-    // sample free-flight distance
-    return -log(1.0 - xi) / sigma_t;
+// Same depth model as SSR: reversed depth
+float linearZ(float depth) {
+    return 1.0 / max(depth, 1e-7);
 }
 
-vec3 randomUnitVector(float a, float b) {
-    float z = 1.0 - 2.0 * a;
-    float r = sqrt(max(0.0, 1.0 - z*z));
-    float phi = 6.2831853 * b;
-    return vec3(r * cos(phi), r * sin(phi), z);
+// View-space position (same as SSR)
+vec3 viewPosFog(vec2 uv, float depth, vec2 lens) {
+    float z = linearZ(depth);
+    return vec3((uv * 2.0 - 1.0) * lens * z, z);
+}
+
+// Fog amount
+float fogAmount(float dist) {
+    float d = clamp((dist - FOG_START) / (FOG_END - FOG_START), 0.0, 1.0);
+    float baseFog = 1.0 - exp(-FOG_DENSITY * dist);
+    return clamp(baseFog * d, 0.0, 1.0);
 }
 
 void main() {
-    vec4 scene = texture(SceneTexSampler, texCoord);
-    float depth = texture(DepthTexSampler, texCoord).r;
+    vec3 sceneColor = texture(SceneTexSampler, texCoord).rgb;
+
+    float depthRaw = texture(DepthTexSampler, texCoord).r;
+    float viewDist = linearZ(depthRaw);
 
     vec2 texel = 1.0 / vec2(textureSize(DepthTexSampler, 0));
-    // Half-extent of the near plane in view space: aspect is width/height, which
-    // in texel terms is texel.y / texel.x.
-    vec2 lens = vec2(TanHalfFov * texel.y / texel.x, TanHalfFov);
-
-    // Keep the neighbourhood on screen, so no two samples land on the same
-    // clamped texel and leave a tangent of length zero behind.
     vec2 uv = clamp(texCoord, texel, 1.0 - texel);
 
-    vec3 P = viewPos(uv, texture(DepthTexSampler, uv).r, lens);
+    // ------------------------------------------------------------
+    // ENVIRONMENT LIGHTING USING SUN COLOR
+    // ------------------------------------------------------------
+    vec3 fogLightColor = mix(texture(SunTexSampler, vec2(1.0, 0.5)).rgb, FOG_COLOR_BASE, 0.7);
 
-    vec3 accum = vec3(0.0);
+    // Blend fog base color with environment lighting
+    vec3 fogColorLit = mix(FOG_COLOR_BASE, fogLightColor, 0.5);
 
-    float xi = 0.0;
-    float fogDistance;
-    for (int i = 0; i < SAMPLES; i++) {
-        fogDistance = sampleFogHit(DENSITY, xi);
-        P = viewPos(uv, fogDistance, lens);
-        for (int x = 0; x < SAMPLES; x++) {
-            for (int y = 0; y < SAMPLES; y++) {
-                vec3 scatteringDirection = randomUnitVector(float(x) / float(SAMPLES), float(y) / float(SAMPLES));
-                int _outcome;
-                vec3 hit = march(P, scatteringDirection, lens, SceneTexSampler, DepthTexSampler, _outcome).rgb;
-                accum += hit;
-            }
-        }
+    // ------------------------------------------------------------
 
-        xi = float(i) / float(SAMPLES);
-    }
+    float f = fogAmount(viewDist);
 
-    accum /= SAMPLES * SAMPLES * SAMPLES;
+    vec3 finalColor = mix(sceneColor, fogColorLit, f);
 
-    fragColor = accum;
+    fragColor = vec4(finalColor, 1.0);
 }
