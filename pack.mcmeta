@@ -1,7 +1,7 @@
 {
   "pack": {
-    "min_format": 96,
-    "max_format": 96,
-    "description": "Provides vibrant visuals-style shaders fpr Java."
+    "description": "Vibrant Visuals style shader pack for Java Edition",
+    "min_format": [97, 1],
+    "max_format": [97, 1]
   }
 }

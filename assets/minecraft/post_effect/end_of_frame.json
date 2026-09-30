@@ -1,0 +1,799 @@
+{
+    "targets": {
+        "a": {},
+        "b": {},
+        "bloom_a0": {},
+        "bloom_a1": {},
+        "bloom_a2": {},
+        "bloom_a3": {},
+        "bloom_b0": {},
+        "bloom_b1": {},
+        "bloom_b2": {},
+        "bloom_b3": {},
+        "bloom_bright": {},
+        "dof_blur": {},
+        "dof_tmp": {},
+        "ssr_blur1": {},
+        "ssr_blur2": {},
+        "ssr_reflect": {},
+        "vol_fog": {},
+        "vol_mask": {},
+        "vol_mask1": {},
+        "vol_mask2": {},
+        "vol_shafts": {},
+        "vol_sun": {
+            "width": 2,
+            "height": 1
+        }
+    },
+    "passes": [
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/ssr",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "minecraft:main"
+                },
+                {
+                    "sampler_name": "DepthTex",
+                    "target": "minecraft:main",
+                    "use_depth_buffer": true
+                }
+            ],
+            "output": "ssr_reflect",
+            "uniforms": {
+                "SsrConfig": [
+                    {
+                        "name": "TanHalfFov",
+                        "type": "float",
+                        "value": 0.7002
+                    },
+                    {
+                        "name": "Strength",
+                        "type": "float",
+                        "value": 0.85
+                    },
+                    {
+                        "name": "Reflectance",
+                        "type": "float",
+                        "value": 0.08
+                    },
+                    {
+                        "name": "DebugView",
+                        "type": "float",
+                        "value": 0.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "ssr_reflect"
+                }
+            ],
+            "output": "ssr_blur1",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 4.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "ssr_blur1"
+                }
+            ],
+            "output": "ssr_blur2",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 4.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/ssr_composite",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "minecraft:main"
+                },
+                {
+                    "sampler_name": "SharpTex",
+                    "target": "ssr_reflect"
+                },
+                {
+                    "sampler_name": "BlurTex",
+                    "target": "ssr_blur2"
+                }
+            ],
+            "output": "a",
+            "uniforms": {
+                "SsrCompositeConfig": [
+                    {
+                        "name": "MaskLevel",
+                        "type": "float",
+                        "value": 0.5
+                    },
+                    {
+                        "name": "RoughStrength",
+                        "type": "float",
+                        "value": 0.3
+                    },
+                    {
+                        "name": "DebugView",
+                        "type": "float",
+                        "value": 0.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_mask",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "a"
+                },
+                {
+                    "sampler_name": "DepthTex",
+                    "target": "minecraft:main",
+                    "use_depth_buffer": true
+                }
+            ],
+            "output": "vol_mask",
+            "uniforms": {
+                "VolMaskConfig": [
+                    {
+                        "name": "SkyThreshold",
+                        "type": "float",
+                        "value": 0.75
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "vol_mask"
+                }
+            ],
+            "output": "vol_mask1",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 3.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "vol_mask1"
+                }
+            ],
+            "output": "vol_mask2",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 3.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_sun",
+            "inputs": [
+                {
+                    "sampler_name": "MaskTex",
+                    "target": "vol_mask2"
+                },
+                {
+                    "sampler_name": "RawMaskTex",
+                    "target": "vol_mask"
+                }
+            ],
+            "output": "vol_sun",
+            "uniforms": {
+                "VolSunConfig": [
+                    {
+                        "name": "SunGain",
+                        "type": "float",
+                        "value": 1.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_rays",
+            "inputs": [
+                {
+                    "sampler_name": "MaskTex",
+                    "target": "vol_mask"
+                },
+                {
+                    "sampler_name": "SunTex",
+                    "target": "vol_sun"
+                }
+            ],
+            "output": "vol_shafts",
+            "uniforms": {
+                "VolRaysConfig": [
+                    {
+                        "name": "Density",
+                        "type": "float",
+                        "value": 0.85
+                    },
+                    {
+                        "name": "Decay",
+                        "type": "float",
+                        "value": 0.92
+                    },
+                    {
+                        "name": "Exposure",
+                        "type": "float",
+                        "value": 0.6
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_fog",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "a"
+                },
+                {
+                    "sampler_name": "DepthTex",
+                    "target": "minecraft:main",
+                    "use_depth_buffer": true
+                }
+            ],
+            "output": "vol_fog"
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/vol_composite",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "a"
+                },
+                {
+                    "sampler_name": "ShaftTex",
+                    "target": "vol_shafts"
+                },
+                {
+                    "sampler_name": "FogTex",
+                    "target": "vol_fog"
+                }
+            ],
+            "output": "b",
+            "uniforms": {
+                "VolConfig": [
+                    {
+                        "name": "ShaftIntensity",
+                        "type": "float",
+                        "value": 0.9
+                    },
+                    {
+                        "name": "FogIntensity",
+                        "type": "float",
+                        "value": 0.8
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/bloom_extract",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "b"
+                }
+            ],
+            "output": "bloom_bright",
+            "uniforms": {
+                "BloomExtractConfig": [
+                    {
+                        "name": "Threshold",
+                        "type": "float",
+                        "value": 0.8
+                    },
+                    {
+                        "name": "Knee",
+                        "type": "float",
+                        "value": 0.25
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_bright"
+                }
+            ],
+            "output": "bloom_a0",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 2.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_a0"
+                }
+            ],
+            "output": "bloom_b0",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 2.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_b0"
+                }
+            ],
+            "output": "bloom_a1",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 4.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_a1"
+                }
+            ],
+            "output": "bloom_b1",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 4.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_b1"
+                }
+            ],
+            "output": "bloom_a2",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 8.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_a2"
+                }
+            ],
+            "output": "bloom_b2",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 8.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_b2"
+                }
+            ],
+            "output": "bloom_a3",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 16.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "bloom_a3"
+                }
+            ],
+            "output": "bloom_b3",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 16.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/bloom_composite",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "b"
+                },
+                {
+                    "sampler_name": "BloomTex",
+                    "target": "bloom_b3"
+                }
+            ],
+            "output": "a",
+            "uniforms": {
+                "BloomConfig": [
+                    {
+                        "name": "Intensity",
+                        "type": "float",
+                        "value": 0.55
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "a"
+                }
+            ],
+            "output": "dof_tmp",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            1.0,
+                            0.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 3.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/box_blur",
+            "inputs": [
+                {
+                    "sampler_name": "In",
+                    "target": "dof_tmp"
+                }
+            ],
+            "output": "dof_blur",
+            "uniforms": {
+                "BlurConfig": [
+                    {
+                        "name": "BlurDir",
+                        "type": "vec2",
+                        "value": [
+                            0.0,
+                            1.0
+                        ]
+                    },
+                    {
+                        "name": "Radius",
+                        "type": "float",
+                        "value": 3.0
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/dof",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "a"
+                },
+                {
+                    "sampler_name": "BlurTex",
+                    "target": "dof_blur"
+                },
+                {
+                    "sampler_name": "DepthTex",
+                    "target": "minecraft:main",
+                    "use_depth_buffer": true
+                }
+            ],
+            "output": "b",
+            "uniforms": {
+                "DofConfig": [
+                    {
+                        "name": "AutoFocus",
+                        "type": "float",
+                        "value": 1.0
+                    },
+                    {
+                        "name": "FocusDistance",
+                        "type": "float",
+                        "value": 8.0
+                    },
+                    {
+                        "name": "Aperture",
+                        "type": "float",
+                        "value": 0.35
+                    },
+                    {
+                        "name": "HandCutoff",
+                        "type": "float",
+                        "value": 0.3
+                    },
+                    {
+                        "name": "MaxBlur",
+                        "type": "float",
+                        "value": 0.7
+                    }
+                ]
+            }
+        },
+        {
+            "vertex_shader": "minecraft:core/screenquad",
+            "fragment_shader": "minecraft:post/colorgrade",
+            "inputs": [
+                {
+                    "sampler_name": "SceneTex",
+                    "target": "b"
+                }
+            ],
+            "output": "minecraft:main",
+            "uniforms": {
+                "ColorGradeConfig": [
+                    {
+                        "name": "Exposure",
+                        "type": "float",
+                        "value": 0.0
+                    },
+                    {
+                        "name": "WhitePoint",
+                        "type": "float",
+                        "value": 1.0
+                    },
+                    {
+                        "name": "Contrast",
+                        "type": "float",
+                        "value": 1.06
+                    },
+                    {
+                        "name": "Saturation",
+                        "type": "float",
+                        "value": 1.1
+                    },
+                    {
+                        "name": "Temperature",
+                        "type": "float",
+                        "value": 0.04
+                    },
+                    {
+                        "name": "Tint",
+                        "type": "float",
+                        "value": 0.0
+                    },
+                    {
+                        "name": "ShadowTint",
+                        "type": "vec3",
+                        "value": [
+                            0.04,
+                            0.07,
+                            0.13
+                        ]
+                    },
+                    {
+                        "name": "HighlightTint",
+                        "type": "vec3",
+                        "value": [
+                            0.1,
+                            0.06,
+                            0.02
+                        ]
+                    },
+                    {
+                        "name": "GradeStrength",
+                        "type": "float",
+                        "value": 0.7
+                    }
+                ]
+            }
+        }
+    ]
+}

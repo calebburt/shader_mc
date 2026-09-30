@@ -1,42 +1,33 @@
 @echo off
-setlocal enabledelayedexpansion
+REM Installs the pack into a Minecraft installation's resourcepacks directory.
+setlocal
 
-REM Resolve directory of this script
+set "PACK_NAME=vibrant-java"
 set "SRC_DIR=%~dp0"
-set "PACK_NAME=shader_mc"
 
-REM Determine Minecraft directory (prefer MINECRAFT_DIR if set)
+REM An explicit MINECRAFT_DIR wins, otherwise fall back to the default profile.
 if defined MINECRAFT_DIR (
-    set "TARGET_PARENT=%MINECRAFT_DIR%\resourcepacks"
+    set "MC_DIR=%MINECRAFT_DIR%"
 ) else (
-    set "TARGET_PARENT=%USERPROFILE%\AppData\Roaming\.minecraft\resourcepacks"
+    set "MC_DIR=%APPDATA%\.minecraft"
 )
 
-set "DEST_DIR=%TARGET_PARENT%\%PACK_NAME%"
-
-REM Check Minecraft directory exists
-if not exist "%TARGET_PARENT%\.." (
-    echo No Minecraft directory at %TARGET_PARENT%\..
-    echo Set MINECRAFT_DIR to override.
+if not exist "%MC_DIR%" (
+    echo No Minecraft directory at %MC_DIR%
+    echo Set MINECRAFT_DIR to point at it and try again.
     exit /b 1
 )
 
-REM Create parent directory
-if not exist "%TARGET_PARENT%" (
-    mkdir "%TARGET_PARENT%"
-)
+set "DEST_DIR=%MC_DIR%\resourcepacks\%PACK_NAME%"
 
-REM Remove existing destination (file, dir, or symlink)
-if exist "%DEST_DIR%" (
-    rmdir /s /q "%DEST_DIR%" 2>nul
-    del /f /q "%DEST_DIR%" 2>nul
-)
-
+if exist "%DEST_DIR%" rmdir /s /q "%DEST_DIR%"
 mkdir "%DEST_DIR%"
 
-REM Copy pack.mcmeta and assets directory
-copy "%SRC_DIR%pack.mcmeta" "%DEST_DIR%" >nul
-xcopy "%SRC_DIR%assets" "%DEST_DIR%\assets" /e /i /h >nul
+REM Only the pack itself. The validation script stays behind.
+copy /y "%SRC_DIR%pack.mcmeta" "%DEST_DIR%\" >nul
+xcopy /e /i /h /y "%SRC_DIR%assets" "%DEST_DIR%\assets" >nul
 
-echo Installed shader pack to: %DEST_DIR%
+echo Installed %PACK_NAME% to %DEST_DIR%
+echo Enable it in Options ^> Video Settings ^> Shader Packs.
+
 endlocal

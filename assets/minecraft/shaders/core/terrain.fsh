@@ -6,6 +6,7 @@
 #include <minecraft:texture_sampling.glsl>
 #include <minecraft:oit.glsl>
 #include <minecraft:terrainglobals.glsl>
+#include <minecraft:vv_lighting.glsl>
 #ifndef MULTIDRAW_TERRAIN
     #include <minecraft:chunksection.glsl>
 #endif
@@ -23,169 +24,96 @@ layout(location = 5) in vec3 cameraRelativePos;
 layout(location = 0) out vec4 fragColor;
 #endif
 
-float value(vec3 c) {
-    return max(max(c.r, max(c.g, c.b)), 1e-5);
-}
-
-vec3 chroma(vec3 c) {
-    return c / value(c);
-}
-
-// Internal mutable state
-float rngState = 0.0;
-
-// Initialize RNG state once per shader invocation
-void initRNG(float seed) {
-    rngState = seed;
-}
-
-// Hash function
-float hash(float x) {
-    return fract(sin(x) * 43758.5453123);
-}
-
-// Combine all inputs into one seed
-float makeSeed() {
-    float s = 0.0;
-
-    // Mix floats
-    s += sphericalVertexDistance * 1.2345;
-    s += cylindricalVertexDistance * 5.6789;
-    s += chunkVisibility * 9.1011;
-
-    // Mix vec2
-    s += dot(texCoord0, vec2(12.9898, 78.233));
-
-    // Mix vec3
-    s += dot(cameraRelativePos, vec3(45.123, 12.345, 98.765));
-
-    // Mix vec4
-    s += dot(vertexColor, vec4(3.14159, 2.71828, 1.61803, 0.57721));
-
-    return hash(s);
-}
-
-// Random float in [0,1)
-float rand() {
-    rngState = hash(rngState + 1.0);
-    return rngState;
-}
-
-// Deterministically perturb a normal using a color.
-vec3 perturbNormal(vec3 normal, vec3 color) {
-    // Map color from [0,1] to [-1,1] so it acts like a direction vector
-    vec3 influence = normalize(color * 2.0 - 1.0);
-
-    // Strength of perturbation based on color intensity
-    float strength = length(color) * 0.5;  // tweakable
-
-    // Combine original normal with influence
-    vec3 perturbed = normalize(normal + influence * strength);
-
-    return perturbed;
-}
-
-// Vanilla's terrain texture sample: RGSS when supersampling is on, nearest
-// otherwise, tinted by the vertex colour. Not wired into the output -- swap it
-// into fragColor when you want the albedo back.
-vec4 sampleTexture() {
+// Albedo is the tinted block colour: the texture sample times the vertex colour,
+// which the vertex shader has already folded the sampled lightmap into. The
+// surviving variation in that product is the biome tint, and splitting it back
+// out is what lets the surface be lit by a colour rather than by a scalar.
+vec4 sampleAlbedo() {
     vec2 pixelSize = 1.0f / TextureSize;
     vec4 texel = UseRgss == 1
         ? sampleRGSS(Sampler0, texCoord0, pixelSize)
         : sampleNearest(Sampler0, texCoord0, pixelSize);
-    return texel * vec4(chroma(vertexColor.rgb), vertexColor.a);
+    return texel * vertexColor;
 }
 
-// The terrain vertex format has no normal attribute, so reconstruct the flat
-// geometric normal from the screen-space derivatives of the camera-relative
-// world position, then orient it back towards the camera (which sits at the
-// origin of that space).
+// The terrain vertex format has no normal attribute, so the flat geometric
+// normal comes from the screen-space derivatives of the camera-relative world
+// position, flipped back to face the camera (which is the origin of that space).
 vec3 geometricNormal(vec3 cameraRelative) {
-    vec3 normal = normalize(cross(dFdx(cameraRelative), dFdy(cameraRelative)));
-    return dot(normal, cameraRelative) > 0.0 ? -normal : normal;
+    vec3 n = normalize(cross(dFdx(cameraRelative), dFdy(cameraRelative)));
+    return dot(n, cameraRelative) > 0.0 ? -n : n;
 }
 
-vec3 getLighting() {
-    const float shininess = 0.5;
-    const vec3 sunColor = vec3(0.9294, 0.7333, 0.6196);
-
-    vec4 texColor = sampleTexture();
-
-    vec3 normal = geometricNormal(cameraRelativePos);
-    normal = normalize(mix(normal, perturbNormal(normal, texColor.rgb), 0.5));
-
-    vec3 N = normalize(normal);
-    vec3 V = normalize(-cameraRelativePos);   // view direction
-    vec3 L = normalize(vec3(1.0, 1.0, 1.0));  // directional light
-    vec3 R = reflect(-L, N);                  // reflection vector
-
-    // Ambient term
-    float ambient = 0.5;
-
-    // Diffuse term
-    float diff = max(dot(N, L), 0.0);
-    float diffuse = 0.5 * diff;
-
-    // Specular term
-    float spec = pow(max(dot(R, V), 0.0), shininess);
-    float specular = 0.25 * spec;
-
-    // Final color
-    float lighting = ambient + diffuse;
-
-    vec3 litColor = lighting * texColor.rgb + specular * sunColor;
-
-    float lightmap = value(vertexColor.rgb);
-
-    litColor = clamp(mix(lightmap * texColor.rgb + specular * lightmap * sunColor, litColor, lightmap), 0.0, 1.0);
-
-    return litColor;
-}
-
-void doFog(inout vec3 color) {
+vec3 doFog(vec3 color) {
     // apply_fog works in vec4, so wrap and unwrap around it.
-    vec3 fog_color = apply_fog(vec4(color, 1.0), sphericalVertexDistance, cylindricalVertexDistance, FogEnvironmentalStart, FogEnvironmentalEnd, FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
-    color = mix(fog_color, color, chunkVisibility);
+    vec3 fogged = apply_fog(vec4(color, 1.0), sphericalVertexDistance, cylindricalVertexDistance,
+                            FogEnvironmentalStart, FogEnvironmentalEnd,
+                            FogRenderDistanceStart, FogRenderDistanceEnd, FogColor).rgb;
+    return mix(fogged, color, chunkVisibility);
 }
 
 void main() {
-    initRNG(makeSeed());
+    vec4 texColor = sampleAlbedo();
 
-    // Derivatives must be evaluated before any discard so that neighbouring
-    // fragments in the same quad still agree on them.
-    vec3 normal = geometricNormal(cameraRelativePos);
+    // Derivatives have to be taken before any discard, or neighbouring fragments
+    // in the same quad end up disagreeing about them and the normals break along
+    // every cutout edge.
+    vec3 flatNormal = geometricNormal(cameraRelativePos);
+    float height = dot(texColor.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 bumped = vv_bump_from_albedo(flatNormal, cameraRelativePos, height, 0.55);
 
-    vec4 color = (UseRgss == 1 ? sampleRGSS(Sampler0, texCoord0, 1.0f / TextureSize) : sampleNearest(Sampler0, texCoord0, 1.0f / TextureSize)) * vertexColor;
     #ifdef ALPHA_CUTOUT
-    if (color.a < ALPHA_CUTOUT) {
+    if (texColor.a < ALPHA_CUTOUT) {
         discard;
     }
     #endif
 
     #ifdef OIT_ALPHA_ONLY
-    executeAlphaOnlyPhase(gl_FragCoord.z, color.a);
+    executeAlphaOnlyPhase(gl_FragCoord.z, texColor.a);
     #else
+    vec3 albedo = clamp(texColor.rgb, 0.0, 1.0);
+    vec3 n = normalize(bumped);
+    vec3 v = normalize(-cameraRelativePos);
 
-    vec4 texColor = sampleTexture();
+    // The lightmap is baked into vertexColor, so recover the light level and the
+    // tint separately: level decides how much light arrives, tint decides its
+    // colour. Anything that came from the texture rather than the tint shows up
+    // as a departure from flat, which is a decent stand-in for a gloss map.
+    float level = vv_light_level(vertexColor.rgb);
+    vec3 tint = texColor.rgb / max(vertexColor.rgb, vec3(1e-4));
+    tint = clamp(mix(vec3(1.0), tint, 0.35), 0.0, 1.0);
 
-    vec3 litColor = getLighting();
+    // Roughness: brighter and flatter texture reads as a smoother, denser
+    // surface. Terrain spans the whole range, so this stays on the rough side
+    // except for the pale blocks that pick up a sheen.
+    float rough = clamp(1.05 - 0.55 * dot(albedo, vec3(0.3333)), 0.18, 0.95);
 
-    doFog(litColor);
+    vec3 sun = vv_sun_direction();
+    vec3 moon = vv_moon_direction();
 
-    float lightmap = value(vertexColor.rgb);
+    vec3 direct = vv_brdf(n, v, sun, albedo, rough, 0.0, vv_sun_radiance()) * tint;
+    direct += vv_brdf(n, v, moon, albedo, rough, 0.0, vv_moon_radiance()) * tint;
 
-    vec3 baseScene = clamp(mix(vec3(lightmap * texColor.rgb), litColor, lightmap), 0.0, 1.0);
+    vec3 ambient = albedo * vv_sky_ambient(n) * level;
+
+    // Facing the light: a cool sky reflection along the silhouette, which is the
+    // Fresnel rim that makes edges read against a bright sky.
+    float rim = pow(1.0 - max(dot(n, v), 0.0), 4.0);
+    vec3 rimColor = mix(vec3(0.05, 0.07, 0.11), vec3(0.30, 0.40, 0.55), smoothstep(-0.2, 0.4, vv_sun_height()));
+    vec3 lit = (direct * level + ambient) + rim * rimColor * level * 0.35;
+
+    doFog(lit);
 
     #ifdef OIT
-    fragColor = vec4(baseScene, vertexColor.a);
+    // Translucent terrain goes through OIT in fabulous, where alpha is coverage
+    // and has to survive; oit_composite puts it into main with a high value.
+    fragColor = vec4(lit, texColor.a);
     #else
-    // Opaque terrain tags itself in main's alpha with 0, so the ssr post pass can
-    // tell it apart from translucent surfaces. Translucent terrain goes through
-    // OIT in fabulous, where fragColor's alpha is coverage and must not be touched,
-    // and reaches main via the composite with a high alpha instead. But in non-
-    // fabulous, OIT is off, and alpha is still significant, so handle that path too.
-    
-    fragColor = vec4(baseScene, 0.0);
+    // Everything drawn in this pass is a solid surface, so main's alpha is free
+    // to carry a tag instead. The post chain reads 0 as "opaque" and anything at
+    // or above its mask level as translucent, which is what lets SSR sharpen its
+    // reflection on glass and water while leaving stone blurred.
+    fragColor = vec4(lit, 0.0);
     #endif
     #endif
 }
