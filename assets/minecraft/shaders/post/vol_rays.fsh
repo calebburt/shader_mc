@@ -2,6 +2,7 @@
 #extension GL_ARB_separate_shader_objects : require
 
 #include <minecraft:vv_sun.glsl>
+#include <minecraft:vv_hdr.glsl>
 
 uniform sampler2D MaskTexSampler; // the light mask, unblurred
 uniform sampler2D SunTexSampler;  // 1x1: light position in rg, strength in b
@@ -61,5 +62,7 @@ void main() {
     // cold, independent of what happened to be bright in the mask.
     vec3 tint = mix(vec3(1.0), vv_key_chroma(), 0.6);
 
-    fragColor = vec4(shafts * tint * (clamp(Exposure, 0.0, 8.0) * sun.b), 1.0);
+    // Stored high-range: a shaft is additive light and may exceed 1.0, and the
+    // composite that consumes it would otherwise clip it flat.
+    fragColor = vec4(vv_hdr_encode(shafts * tint * (clamp(Exposure, 0.0, 8.0) * sun.b)), 1.0);
 }

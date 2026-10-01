@@ -1,6 +1,8 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
+#include <minecraft:vv_hdr.glsl>
+
 uniform sampler2D SceneTexSampler;
 
 // Exposure: stops of light, applied before anything else so the tone curve has
@@ -38,9 +40,10 @@ float luma(vec3 c) {
 }
 
 // A shoulder that only touches the top of the range: linear below the knee, then
-// a smooth exponential approach to the white point. main is RGBA8, so nothing
-// arriving here is above 1.0, but the rolloff is what stops a bright sky or a
-// bloom halo from ending on a flat clipped edge.
+// a smooth exponential approach to the white point. This is the only tone map in
+// the chain, and it is why the scene is carried high-range up to here: a sky or a
+// shaft that the world render would have clipped now rolls off instead of ending
+// on a flat edge.
 float shoulder(float x, float white) {
     float knee = white * 0.75;
     if (x <= knee) {
@@ -51,7 +54,9 @@ float shoulder(float x, float white) {
 
 void main() {
     vec4 scene = texture(SceneTexSampler, texCoord);
-    vec3 color = scene.rgb * exp2(Exposure);
+    // The final pass is the one place the high-range encoding is undone; from
+    // here the image is display referred and clamped.
+    vec3 color = vv_hdr_decode(scene.rgb) * exp2(Exposure);
 
     // White balance. A real sensor gain moves the three channels by different
     // amounts; a simple scale towards a warm or cool axis lands in the same place

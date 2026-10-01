@@ -138,9 +138,26 @@ Common knobs, all under the pass that uses them:
   `Temperature`, `Tint`, `ShadowTint`, `HighlightTint`, `GradeStrength` — the
   final look.
 
-`minecraft:main` is an RGBA8 target, so the grade and bloom operate in
-approximately `0.0` to `1.0`. There is no HDR headroom to work with, which is
-why the grade has a highlight shoulder rather than a true HDR tone mapper.
+### High dynamic range
+
+`minecraft:main` and every post-chain target are `GpuFormat.RGBA8_UNORM`: the game
+hardcodes that format in `MainTarget` and in `PostChain.addToFrame`, and no
+resource-pack field selects another. An 8-bit UNORM attachment clamps at `1.0` on
+store, so the chain cannot simply work in scene-linear and expect a highlight to
+reach the final tone map intact.
+
+To get headroom anyway, the passes that add light scale the scene down by
+`1 / VV_HDR_SCALE` before writing and back up after reading (`include/vv_hdr.glsl`).
+A single fixed scale is used rather than a per-pixel shared exponent (Radiance
+RGBE) because a fixed scale commutes with the bilinear sampling and box blurs the
+bloom pyramid and depth of field rely on; a shared exponent does not. The only
+tone map is the final `colorgrade` pass, which decodes and rolls the excess off.
+
+`VV_HDR_SCALE` (currently `4.0`) is the headroom/banding dial: higher reaches
+further past white, but leaves the `0..1` range fewer codes, which is why the
+encoder dithers. This widens the range the *post chain* can carry; it cannot
+recover what the world render already clipped into `main`, because most core
+shaders are vanilla and a pack cannot switch the whole world render to float.
 
 ## Validation
 
@@ -183,6 +200,12 @@ Without both, the script says so and still runs the JSON checks.
   were re-derived for the sun-aware formulation and chosen so the maths lands in
   range, not against a screenshot. `VolRaysConfig.Exposure` and
   `VolConfig.ShaftIntensity` are the two to reach for first.
+- **The HDR encoding trades precision for range and is untested.** `VV_HDR_SCALE`
+  at `4.0` leaves the visible `0..1` range in the bottom quarter of the buffer
+  and dithers the rest; that is a deliberate headroom-versus-banding choice. It
+  also only widens the post chain, so world highlights that the core shaders
+  clipped into `main` stay clipped. Watch for banding on skies and drop
+  `VV_HDR_SCALE` if it shows.
 - **Performance is untested.** Twenty five full screen passes with a depth read,
   a four level bloom pyramid, and a 40x40 mask search walked twice per frame is a
   lot of bandwidth. The chain has no quality tiers; if it is too slow, dropping

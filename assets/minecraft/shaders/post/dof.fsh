@@ -1,6 +1,8 @@
 #version 330
 #extension GL_ARB_separate_shader_objects : require
 
+#include <minecraft:vv_hdr.glsl>
+
 uniform sampler2D SceneTexSampler;
 uniform sampler2D BlurTexSampler;
 uniform sampler2D DepthTexSampler;
@@ -68,7 +70,11 @@ void main() {
         coc = 0.0; // the held item, not part of the scene
     }
 
+    // The sharp scene and its blur are both high-range encoded, so decode before
+    // mixing and re-encode so the highlight survives to the tone map.
+    vec3 sharp = vv_hdr_decode(scene.rgb);
+    vec3 blurred = vv_hdr_decode(texture(BlurTexSampler, texCoord).rgb);
+
     // Alpha passes through: it carries terrain.fsh's opaque tag.
-    fragColor = vec4(mix(scene.rgb, texture(BlurTexSampler, texCoord).rgb, coc),
-                     scene.a);
+    fragColor = vec4(vv_hdr_encode(mix(sharp, blurred, coc)), scene.a);
 }
